@@ -1,3 +1,5 @@
+import logging
+
 VERSION = (0, 0, 1, 'pre-alpha', 2)
 
 def get_version():
@@ -12,3 +14,6 @@ def get_version():
             if VERSION[4] != 0:
                 version = '%s %s' % (version, VERSION[4])
     return version
+
+logger = logging.getLogger(__name__)
+

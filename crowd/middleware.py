@@ -1,6 +1,6 @@
 from crowd.backend import CrowdBackend
 from datetime import  datetime, timedelta
-from django.contrib.auth import login as auth_login
+from django.contrib import auth
 from django.contrib.auth.models import AnonymousUser
 
 __author__ = 'sannies'
@@ -21,11 +21,12 @@ class CrowdSSOAuthenticationMiddleware(object):
             crowdUser = self.crowdBackend.findUserByToken(crowd_token, validationFactors)
             if crowdUser is not None:
                 crowdUser.backend = "%s.%s" % (self.crowdBackend.__module__, self.crowdBackend.__class__.__name__)
-                auth_login(request, crowdUser)
+                auth.login(request, crowdUser)
                 self.crowdUserLoggedIn = True
+                setattr(request.session, 'isCrowdUser', True)
             return None
         else:
-            if hasattr(request.user, 'isCrowdUser') and request.user.isCrowdUser:
+            if hasattr(request.session, 'isCrowdUser') and request.session.isCrowdUser:
                 self.crowdUserLoggedIn = True
             return None
 
@@ -35,7 +36,8 @@ class CrowdSSOAuthenticationMiddleware(object):
             crowd_token = request.COOKIES["crowd.token_key"]
         except KeyError:
             crowd_token = None
-        if request.user.is_authenticated() and crowd_token is None:
+        if self.crowdUserLoggedIn and hasattr(request, 'user') and \
+                request.user.is_authenticated() and crowd_token is None:
             cookieInfo = self.crowdBackend.getCookieInfo()
             validationFactors = self.crowdBackend.getValidationFactors(request)
             principalToken = self.crowdBackend.getPrincipalToken(request.user.username, validationFactors)
@@ -47,7 +49,7 @@ class CrowdSSOAuthenticationMiddleware(object):
                         path="/",
                         secure=cookieInfo.secure)
         else:
-            if request.user is AnonymousUser and crowd_token is not None and self.crowdUserLoggedIn:
+            if crowd_token is not None and self.crowdUserLoggedIn:
                 self.crowdBackend.invalidateToken()
 
 
