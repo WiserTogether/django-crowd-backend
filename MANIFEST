@@ -1,0 +1,7 @@
+setup.py
+django_crowd/__init__.py
+django_crowd/backend.py
+django_crowd/crowdtest.py
+django_crowd/middleware.py
+django_crowd/models.py
+django_crowd/settings.py
