@@ -1,7 +1,7 @@
 from suds.client import Client, WebFault
 import suds.xsd.doctor as dr
 from django.contrib.auth.models import User, Group
-
+from . import logger, settings
 
 class CrowdBackend(object):
     "Atlassian Crowd Authentication Backend"
@@ -37,7 +37,7 @@ class CrowdBackend(object):
                 doctor.add(imp)
 
             # Create the SOAP client, doctoring it to fix imports
-        return Client(crowd_settings.AUTH_CROWD_SERVER_URI, doctor=doctor)
+        return Client(settings.SERVER_URI, doctor=doctor)
 
     def check_client_and_app_authentication(self):
         if (self.crowdClient is None):
@@ -51,23 +51,22 @@ class CrowdBackend(object):
         user, created = User.objects.get_or_create(username=user_id)
         save_user = False
         if created:
-        #logger.debug("Created Django user %s", username)
+            #logger.debug("Created Django user %s", username)
             user.set_unusable_password()
             save_user = True
 
-        if( crowd_settings.AUTH_CROWD_ALWAYS_UPDATE_USER or created):
-        #logger.debug("Populating Django user %s", username)
+        if( settings.ALWAYS_UPDATE_USER or created):
+            #logger.debug("Populating Django user %s", username)
             self.populate_user(user)
             save_user = True
 
-        if crowd_settings.AUTH_CROWD_MIRROR_GROUPS:
+        if settings.MIRROR_GROUPS:
             self.populate_groups(user)
             save_user = True
 
         if save_user:
             user.save()
 
-        user.isCrowdUser = True
         return user
 
 
@@ -75,7 +74,6 @@ class CrowdBackend(object):
         try:
             self.check_client_and_app_authentication()
             self.principalToken = self.crowdClient.service.authenticatePrincipalSimple(self.authenticationToken, username,
-                                                                                       password)
             return self.create_or_update_user(username)
         except WebFault, e:
             return None
@@ -120,8 +118,8 @@ class CrowdBackend(object):
 
     def authenticateApplication(self, client):
         auth_context = client.factory.create('ns1:ApplicationAuthenticationContext')
-        auth_context.name = crowd_settings.AUTH_CROWD_APPLICATION_USER
-        auth_context.credential.credential = crowd_settings.AUTH_CROWD_APPLICATION_PASSWORD
+        auth_context.name = settings.APPLICATION_USER
+        auth_context.credential.credential = settings.APPLICATION_PASSWORD
         return client.service.authenticateApplication(auth_context)
 
 
@@ -149,9 +147,9 @@ class CrowdBackend(object):
                 group.save()
 
             user.groups.add(group)
-            if (group.name == crowd_settings.AUTH_CROWD_SUPERUSER_GROUP):
+            if (group.name == settings.SUPERUSER_GROUP):
                 user.is_superuser = True
-            if (group.name == crowd_settings.AUTH_CROWD_STAFF_GROUP):
+            if (group.name == settings.STAFF_GROUP):
                 user.is_staff = True
 
 
@@ -172,10 +170,13 @@ class CrowdBackend(object):
         self.check_client_and_app_authentication()
 
         if self.principalToken is None:
-            self.principalToken = self.crowdClient.service.createPrincipalToken(
-                    self.authenticationToken,
-                    username,
-                    validationFactors)
+            try:
+                self.principalToken = self.crowdClient.service.createPrincipalToken(
+                        self.authenticationToken,
+                        username,
+                        validationFactors)
+            except Exception:
+                return None
 
         return self.principalToken
 
@@ -190,35 +191,3 @@ class CrowdBackend(object):
             self.check_client_and_app_authentication()
             return self.crowdClient.service.getCookieInfo(self.authenticationToken)
 
-
-class CrowdSettings(object):
-    """
-    This is a simple class to take the place of the global settings object. An
-    instance will contain all of our settings as attributes, with default values
-    if they are not specified by the configuration.
-    """
-    defaults = {
-        'AUTH_CROWD_ALWAYS_UPDATE_USER': True,
-        'AUTH_CROWD_MIRROR_GROUPS': True,
-        'AUTH_CROWD_STAFF_GROUP': 'staff',
-        'AUTH_CROWD_SUPERUSER_GROUP': 'superuser',
-        'AUTH_CROWD_APPLICATION_USER': 'django',
-        'AUTH_CROWD_APPLICATION_PASSWORD': 'django',
-        'AUTH_CROWD_SERVER_URI': 'http://127.0.0.1:8095/crowd/services/SecurityServer?wsdl'
-    }
-
-    def __init__(self):
-        """
-        Loads our settings from django.conf.settings, applying defaults for any
-        that are omitted.
-        """
-        from django.conf import settings
-
-        for name, default in self.defaults.iteritems():
-            value = getattr(settings, name, default)
-            setattr(self, name, value)
-
-
-        # Our global settings object
-
-crowd_settings = CrowdSettings()
