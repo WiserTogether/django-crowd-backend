@@ -1,4 +1,4 @@
-from crowd.backend import CrowdBackend
+from .backend import CrowdBackend
 from datetime import  datetime, timedelta
 from django.contrib import auth
 from django.contrib.auth.models import AnonymousUser

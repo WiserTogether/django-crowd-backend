@@ -8,6 +8,10 @@ class CrowdBackend(object):
     crowdClient = None
     authenticationToken = None
     principalToken = None
+    # TODO: research supports_object_permissions and supports_anonymous_user and
+    # ensure values are accurate
+    supports_object_permissions = False
+    supports_anonymous_user = False
 
     NAME = "NAME"
     RANDOM_NUMBER = "Random-Number"
@@ -73,7 +77,8 @@ class CrowdBackend(object):
     def authenticate(self, username=None, password=None):
         try:
             self.check_client_and_app_authentication()
-            self.principalToken = self.crowdClient.service.authenticatePrincipalSimple(self.authenticationToken, username,
+            self.principalToken = self.crowdClient.service.authenticatePrincipalSimple(self.authenticationToken, 
+                username, password) 
             return self.create_or_update_user(username)
         except WebFault, e:
             return None
