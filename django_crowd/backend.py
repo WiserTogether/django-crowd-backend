@@ -55,12 +55,12 @@ class CrowdBackend(object):
         user, created = User.objects.get_or_create(username=user_id)
         save_user = False
         if created:
-            #logger.debug("Created Django user %s", username)
+            logger.debug("Created Django user %s", user_id)
             user.set_unusable_password()
             save_user = True
 
         if( settings.ALWAYS_UPDATE_USER or created):
-            #logger.debug("Populating Django user %s", username)
+            logger.debug("Populating Django user %s", user_id)
             self.populate_user(user)
             save_user = True
 
@@ -70,6 +70,7 @@ class CrowdBackend(object):
 
         if save_user:
             user.save()
+        logger.debug("user %s found and created", user_id)
 
         return user
 
@@ -79,7 +80,10 @@ class CrowdBackend(object):
             self.check_client_and_app_authentication()
             self.principalToken = self.crowdClient.service.authenticatePrincipalSimple(self.authenticationToken, 
                 username, password) 
-            return self.create_or_update_user(username)
+            retval = self.create_or_update_user(username)
+            logger.debug('crowd authentication for %s: %s' %(username,retval))
+            return retval
+
         except WebFault, e:
             return None
 
@@ -142,20 +146,28 @@ class CrowdBackend(object):
         pass
 
     def populate_groups(self, user):
+        """
+        get the list of groups and populate staff and superuser properties
+        """
         self.check_client_and_app_authentication()
         arrayOfGroups = self.crowdClient.service.findGroupMemberships(self.authenticationToken, user.username)
+        logger.debug('all groups for %s from crowd: %s' %(user.username, arrayOfGroups))
         user.groups.clear()
-
         for crowdgroup in arrayOfGroups[0]:
             group, created = Group.objects.get_or_create(name=crowdgroup)
             if created:
                 group.save()
-
             user.groups.add(group)
-            if (group.name == settings.SUPERUSER_GROUP):
-                user.is_superuser = True
-            if (group.name == settings.STAFF_GROUP):
-                user.is_staff = True
+
+        try:
+            user.is_superuser = self.crowdClient.service.isGroupMember(
+                    self.authenticationToken, settings.SUPERUSER_GROUP, user.username)
+            user.is_staff = self.crowdClient.service.isGroupMember(
+                    self.authenticationToken, settings.STAFF_GROUP, user.username)
+            user.save()
+            logger.debug('%s update: is_staff: %s, is_superuser: %s' %(user.username, user.is_staff, user.is_superuser))
+        except:
+            logger.exception()
 
 
 
