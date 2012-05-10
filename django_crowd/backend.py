@@ -150,6 +150,8 @@ class CrowdBackend(object):
         get the list of groups and populate staff and superuser properties
         """
         self.check_client_and_app_authentication()
+        # TODO: adjust this function to properly walk the group tree so all
+        # nested group memberships are represented properly
         arrayOfGroups = self.crowdClient.service.findGroupMemberships(self.authenticationToken, user.username)
         logger.debug('all groups for %s from crowd: %s' %(user.username, arrayOfGroups))
         user.groups.clear()
@@ -160,10 +162,14 @@ class CrowdBackend(object):
             user.groups.add(group)
 
         try:
-            user.is_superuser = self.crowdClient.service.isGroupMember(
-                    self.authenticationToken, settings.SUPERUSER_GROUP, user.username)
             user.is_staff = self.crowdClient.service.isGroupMember(
                     self.authenticationToken, settings.STAFF_GROUP, user.username)
+
+            if self.crowdClient.service.isGroupMember(
+                    self.authenticationToken, settings.SUPERUSER_GROUP, user.username):
+                user.is_superuser = True
+                user.is_staff = True
+
             user.save()
             logger.debug('%s update: is_staff: %s, is_superuser: %s' %(user.username, user.is_staff, user.is_superuser))
         except:
